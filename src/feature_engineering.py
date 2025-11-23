@@ -1,5 +1,4 @@
 # Feature Engineering utilities for Student Dropout Prediction
-# Based on analysis in .private/suitable_algorithm.md
 
 import numpy as np
 import pandas as pd
