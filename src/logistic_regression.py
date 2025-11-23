@@ -52,15 +52,14 @@ class LogisticRegressionScratch:
         
         Note: We MAXIMIZE this (ascent), not minimize.
         """
-        # TODO: Implementasi log-likelihood
-        # Clip predictions to avoid log(0)
-        # eps = 1e-15
-        # y_pred = np.clip(y_pred, eps, 1 - eps)
-        # ll = np.sum(y * np.log(y_pred) + (1 - y) * np.log(1 - y_pred))
-        # if self.l2 > 0:
-        #     ll -= (self.l2 / 2) * np.sum(self.w ** 2)
-        # return ll
-        pass
+        eps = 1e-15
+        y_pred = np.clip(y_pred, eps, 1 - eps)
+        ll = np.sum(y * np.log(y_pred) + (1 - y) * np.log(1 - y_pred))
+        
+        if self.l2 > 0 and self.w is not None:
+            ll -= (self.l2 / 2) * np.sum(self.w ** 2)
+        
+        return ll
     
     def _compute_gradients_ascent(self, X, y, y_pred):
         """
@@ -83,14 +82,17 @@ class LogisticRegressionScratch:
         grad_w : gradient for weights
         grad_b : gradient for bias
         """
-        # TODO: Implementasi gradient computation untuk ASCENT
-        # m = X.shape[0]
-        # grad_w = (1/m) * X.T @ (y - y_pred)
-        # if self.l2 > 0:
-        #     grad_w -= (self.l2 / m) * self.w
-        # grad_b = (1/m) * np.sum(y - y_pred)
-        # return grad_w, grad_b
-        pass
+        m = X.shape[0]
+        
+        # Gradient for ascent (note: y - y_pred, not y_pred - y)
+        grad_w = (1/m) * X.T @ (y - y_pred)
+        
+        if self.l2 > 0:
+            grad_w -= (self.l2 / m) * self.w
+        
+        grad_b = (1/m) * np.sum(y - y_pred)
+        
+        return grad_w, grad_b
     
     def fit(self, X, y):
         """
@@ -114,49 +116,77 @@ class LogisticRegressionScratch:
         y : array-like of shape (n_samples,)
             Target values (0 or 1 for binary)
         """
-        # TODO: Implementasi Stochastic Gradient Ascent
-        # 1. Convert to numpy arrays
-        # X = np.array(X)
-        # y = np.array(y)
-        # m, n = X.shape
+        # Convert to numpy arrays
+        X = np.array(X) if not isinstance(X, np.ndarray) else X
+        y = np.array(y) if not isinstance(y, np.ndarray) else y
         
-        # 2. Initialize weights and bias
-        # self.w = np.zeros(n)
-        # self.b = 0
+        # Check if multiclass
+        self.classes_ = np.unique(y)
+        if len(self.classes_) > 2:
+            self.is_multiclass = True
+            # For multiclass, use One-vs-Rest
+            self._fit_multiclass(X, y)
+            return
         
-        # 3. Determine batch size
-        # if self.batch_size == 'full':
-        #     batch_size = m
-        # else:
-        #     batch_size = min(self.batch_size, m)
+        # Binary classification
+        m, n = X.shape
         
-        # 4. Training loop
-        # for epoch in range(self.n_iter):
-        #     # Shuffle data for stochastic behavior
-        #     indices = np.random.permutation(m)
-        #     X_shuffled = X[indices]
-        #     y_shuffled = y[indices]
-        #     
-        #     # Mini-batch/stochastic updates
-        #     for i in range(0, m, batch_size):
-        #         X_batch = X_shuffled[i:i+batch_size]
-        #         y_batch = y_shuffled[i:i+batch_size]
-        #         
-        #         # Forward pass
-        #         y_pred = self._sigmoid(X_batch @ self.w + self.b)
-        #         
-        #         # Compute gradients (ASCENT)
-        #         grad_w, grad_b = self._compute_gradients_ascent(X_batch, y_batch, y_pred)
-        #         
-        #         # Update parameters (ASCENT: w = w + lr * grad)
-        #         self.w += self.lr * grad_w
-        #         self.b += self.lr * grad_b
-        #     
-        #     # Compute and store log-likelihood for entire dataset
-        #     y_pred_full = self._sigmoid(X @ self.w + self.b)
-        #     ll = self._log_likelihood(X, y, y_pred_full)
-        #     self.loss_history.append(ll)
-        pass
+        # Initialize weights and bias
+        self.w = np.zeros(n)
+        self.b = 0
+        self.loss_history = []
+        
+        # Determine batch size
+        if self.batch_size == 'full':
+            batch_size = m
+        else:
+            batch_size = min(self.batch_size, m)
+        
+        # Training loop
+        for epoch in range(self.n_iter):
+            # Shuffle data for stochastic behavior
+            indices = np.random.permutation(m)
+            X_shuffled = X[indices]
+            y_shuffled = y[indices]
+            
+            # Mini-batch/stochastic updates
+            for i in range(0, m, batch_size):
+                X_batch = X_shuffled[i:i+batch_size]
+                y_batch = y_shuffled[i:i+batch_size]
+                
+                # Forward pass
+                y_pred = self._sigmoid(X_batch @ self.w + self.b)
+                
+                # Compute gradients (ASCENT)
+                grad_w, grad_b = self._compute_gradients_ascent(X_batch, y_batch, y_pred)
+                
+                # Update parameters (ASCENT: w = w + lr * grad)
+                self.w += self.lr * grad_w
+                self.b += self.lr * grad_b
+            
+            # Compute and store log-likelihood for entire dataset
+            if epoch % 100 == 0:  # Save every 100 epochs to reduce overhead
+                y_pred_full = self._sigmoid(X @ self.w + self.b)
+                ll = self._log_likelihood(X, y, y_pred_full)
+                self.loss_history.append(ll)
+    
+    def _fit_multiclass(self, X, y):
+        """Fit multiclass using One-vs-Rest strategy."""
+        self.classifiers_ = []
+        
+        for class_label in self.classes_:
+            # Create binary labels: 1 for current class, 0 for others
+            y_binary = (y == class_label).astype(int)
+            
+            # Train binary classifier
+            clf = LogisticRegressionScratch(
+                lr=self.lr,
+                n_iter=self.n_iter,
+                l2=self.l2,
+                batch_size=self.batch_size
+            )
+            clf.fit(X, y_binary)
+            self.classifiers_.append(clf)
     
     def predict_proba(self, X):
         """
@@ -172,8 +202,14 @@ class LogisticRegressionScratch:
         proba : array of shape (n_samples,) or (n_samples, n_classes)
             Predicted probabilities
         """
-        # TODO: return self._sigmoid(X @ self.w + self.b)
-        pass
+        X = np.array(X) if not isinstance(X, np.ndarray) else X
+        
+        if self.is_multiclass:
+            # Get probabilities from all classifiers
+            probas = np.array([clf.predict_proba(X) for clf in self.classifiers_]).T
+            return probas
+        else:
+            return self._sigmoid(X @ self.w + self.b)
     
     def predict(self, X, threshold=0.5):
         """
@@ -191,9 +227,14 @@ class LogisticRegressionScratch:
         y_pred : array of shape (n_samples,)
             Predicted class labels
         """
-        # TODO: Apply threshold to probabilities
-        # return (self.predict_proba(X) >= threshold).astype(int)
-        pass
+        X = np.array(X) if not isinstance(X, np.ndarray) else X
+        
+        if self.is_multiclass:
+            # Get probabilities and return class with highest probability
+            probas = self.predict_proba(X)
+            return self.classes_[np.argmax(probas, axis=1)]
+        else:
+            return (self.predict_proba(X) >= threshold).astype(int)
     
     def save(self, filepath):
         """
