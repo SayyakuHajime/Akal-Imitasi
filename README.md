@@ -2,7 +2,11 @@
 
 # Akal-Imitasi
 
-<!-- PROJECT LOGO -->
+<!-- PROJECT LOGO 
+ -->
+<img width="2510" alt="Ai-Ohto-NoBG" src="https://github.com/user-attachments/assets/952a044b-95b6-422b-871f-c8d98da94187" />
+
+
 <br />
 <div align="center">
   <h3 align="center">Machine Learning from Scratch</h3>
