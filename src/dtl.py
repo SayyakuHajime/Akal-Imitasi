@@ -470,7 +470,7 @@ class C45Classifier:
     def _build_tree(self, X, y, depth=0):
         """
         Recursively build the decision tree.
-        Returns: tree node (dict or leaf value)
+        Returns: tree node (dict or leaf value with class distribution)
         """
         n_samples, n_features = X.shape
         n_labels = len(np.unique(y))
@@ -479,9 +479,12 @@ class C45Classifier:
         if (self.max_depth is not None and depth >= self.max_depth) or \
            n_labels == 1 or \
            n_samples < self.min_samples_split:
-            # Return most common class as leaf
+            # Return most common class as leaf + class distribution
             leaf_value = np.bincount(y.astype(int)).argmax()
-            return leaf_value
+            # Store class distribution for predict_proba
+            class_dist = np.bincount(y.astype(int), minlength=self.n_classes_)
+            class_proba = class_dist / class_dist.sum()
+            return {'value': leaf_value, 'proba': class_proba}
         
         # Find best split
         feature_indices = np.arange(n_features)
@@ -490,7 +493,9 @@ class C45Classifier:
         # If no gain, return leaf
         if best_gain == 0 or best_feature is None:
             leaf_value = np.bincount(y.astype(int)).argmax()
-            return leaf_value
+            class_dist = np.bincount(y.astype(int), minlength=self.n_classes_)
+            class_proba = class_dist / class_dist.sum()
+            return {'value': leaf_value, 'proba': class_proba}
         
         # Split data
         left_mask = X[:, best_feature] <= best_threshold
@@ -534,6 +539,9 @@ class C45Classifier:
         X = np.array(X) if not isinstance(X, np.ndarray) else X
         y = np.array(y) if not isinstance(y, np.ndarray) else y
         
+        # Store number of classes for predict_proba
+        self.n_classes_ = len(np.unique(y))
+        
         self.tree_ = self._build_tree(X, y)
         
         if self.ccp_alpha > 0:
@@ -543,7 +551,11 @@ class C45Classifier:
         """
         Predict class for a single sample by traversing the tree.
         """
-        # If leaf node (integer), return the value
+        # If leaf node (dict with 'value'), return the value
+        if isinstance(tree, dict) and 'value' in tree:
+            return tree['value']
+        
+        # Old format compatibility: if integer, return it
         if not isinstance(tree, dict):
             return tree
         
@@ -553,12 +565,49 @@ class C45Classifier:
         else:
             return self._predict_sample(x, tree['right'])
     
+    def _predict_proba_sample(self, x, tree):
+        """
+        Predict class probabilities for a single sample.
+        """
+        # If leaf node with probabilities
+        if isinstance(tree, dict) and 'proba' in tree:
+            return tree['proba']
+        
+        # Old format compatibility: if integer leaf, return one-hot
+        if not isinstance(tree, dict):
+            proba = np.zeros(self.n_classes_)
+            proba[tree] = 1.0
+            return proba
+        
+        # Otherwise, traverse tree
+        if x[tree['feature']] <= tree['threshold']:
+            return self._predict_proba_sample(x, tree['left'])
+        else:
+            return self._predict_proba_sample(x, tree['right'])
+    
     def predict(self, X):
         """
         Predict class labels for samples in X.
         """
         X = np.array(X) if not isinstance(X, np.ndarray) else X
         return np.array([self._predict_sample(x, self.tree_) for x in X])
+    
+    def predict_proba(self, X):
+        """
+        Predict class probabilities for samples in X.
+        
+        Parameters:
+        -----------
+        X : array-like of shape (n_samples, n_features)
+            Samples to predict
+            
+        Returns:
+        --------
+        proba : array of shape (n_samples, n_classes)
+            Predicted class probabilities
+        """
+        X = np.array(X) if not isinstance(X, np.ndarray) else X
+        return np.array([self._predict_proba_sample(x, self.tree_) for x in X])
     
     def save(self, filepath):
         """

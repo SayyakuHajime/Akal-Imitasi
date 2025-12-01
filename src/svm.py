@@ -10,10 +10,11 @@ class _BinarySVM:
     Helper class for binary SVM classification.
     Not meant to be used directly - used internally by multiclass strategies.
     """
-    def __init__(self, lr=0.01, C=1.0, n_iter=1000):
+    def __init__(self, lr=0.01, C=1.0, n_iter=1000, class_weight=None):
         self.lr = lr
         self.C = C
         self.n_iter = n_iter
+        self.class_weight = class_weight
         self.w = None
         self.b = None
     
@@ -26,18 +27,20 @@ class _BinarySVM:
         return np.sum(hinge_loss) / m + reg_loss
     
     def _compute_gradients(self, X, y):
-        """Compute gradients for SVM."""
+        """Compute gradients for SVM with optional class weighting."""
         m = X.shape[0]
         distances = y * (X @ self.w + self.b)
-        
+
         dw = self.w.copy()
         db = 0
-        
+
         for idx, d in enumerate(distances):
             if d < 1:
-                dw -= self.C * y[idx] * X[idx]
-                db -= self.C * y[idx]
-        
+                # Apply class weight if provided
+                weight = self.class_weight.get(int(y[idx]), 1.0) if self.class_weight else 1.0
+                dw -= self.C * weight * y[idx] * X[idx]
+                db -= self.C * weight * y[idx]
+
         return dw / m, db / m
     
     def fit(self, X, y):
@@ -137,34 +140,56 @@ class SVMBase(ABC):
 class SVMOneVsAll(SVMBase):
     """
     SVM with One-vs-All (OvA) / One-vs-Rest (OvR) multiclass strategy.
-    
+
     For K classes, trains K binary classifiers.
     Each classifier distinguishes one class from all others.
     Prediction: choose class with highest decision score.
     """
-    def __init__(self, lr=0.01, C=1.0, n_iter=1000):
+    def __init__(self, lr=0.01, C=1.0, n_iter=1000, class_weight='balanced'):
         super().__init__(lr, C, n_iter)
+        self.class_weight_mode = class_weight
         self.classifiers_ = []  # List of (w, b) for each class
     
     def fit(self, X, y):
         """
-        Train OvA SVM classifier.
+        Train OvA SVM classifier with class weighting.
         """
         X = np.array(X) if not isinstance(X, np.ndarray) else X
         y = np.array(y) if not isinstance(y, np.ndarray) else y
-        
+
         self.classes_ = np.unique(y)
         self.classifiers_ = []
-        
+
+        # Compute class weights if balanced mode
+        class_weights = None
+        if self.class_weight_mode == 'balanced':
+            n_samples = len(y)
+            n_classes = len(self.classes_)
+            class_weights_multiclass = {}
+            for cls in self.classes_:
+                n_samples_cls = np.sum(y == cls)
+                class_weights_multiclass[cls] = n_samples / (n_classes * n_samples_cls)
+
         # Train K binary classifiers
         for class_label in self.classes_:
             # Create binary labels: +1 for current class, -1 for others
             y_binary = np.where(y == class_label, 1, -1)
-            
+
+            # Compute binary class weights for this OvA classifier
+            if self.class_weight_mode == 'balanced':
+                n_pos = np.sum(y_binary == 1)
+                n_neg = np.sum(y_binary == -1)
+                total = n_pos + n_neg
+                weight_pos = total / (2 * n_pos) if n_pos > 0 else 1.0
+                weight_neg = total / (2 * n_neg) if n_neg > 0 else 1.0
+                binary_weights = {1: weight_pos, -1: weight_neg}
+            else:
+                binary_weights = None
+
             # Create and train binary SVM
-            clf = _BinarySVM(lr=self.lr, C=self.C, n_iter=self.n_iter)
+            clf = _BinarySVM(lr=self.lr, C=self.C, n_iter=self.n_iter, class_weight=binary_weights)
             clf.fit(X, y_binary)
-            
+
             # Store classifier
             self.classifiers_.append((clf.w, clf.b))
     
@@ -191,6 +216,24 @@ class SVMOneVsAll(SVMBase):
         predictions = np.argmax(scores, axis=1)
         return self.classes_[predictions]
     
+    def predict_proba(self, X):
+        """
+        Predict class probabilities using OvA strategy.
+        Uses softmax on decision scores to convert to probabilities.
+        
+        Returns:
+        --------
+        proba : array of shape (n_samples, n_classes)
+            Predicted class probabilities
+        """
+        scores = self.decision_function(X)
+        
+        # Apply softmax to convert scores to probabilities
+        exp_scores = np.exp(scores - np.max(scores, axis=1, keepdims=True))
+        probabilities = exp_scores / np.sum(exp_scores, axis=1, keepdims=True)
+        
+        return probabilities
+    
     def _get_save_dict(self):
         """Override to save all classifiers."""
         base_dict = super()._get_save_dict()
@@ -204,20 +247,21 @@ class SVMOneVsAll(SVMBase):
 class SVMOneVsOne(SVMBase):
     """
     SVM with One-vs-One (OvO) multiclass strategy.
-    
+
     For K classes, trains K*(K-1)/2 binary classifiers.
     Each classifier distinguishes between two classes.
     Prediction: voting scheme (class with most wins).
     """
-    def __init__(self, lr=0.01, C=1.0, n_iter=1000):
+    def __init__(self, lr=0.01, C=1.0, n_iter=1000, class_weight='balanced'):
         super().__init__(lr, C, n_iter)
+        self.class_weight_mode = class_weight
         self.classifiers_ = []  # List of ((class_i, class_j), (w, b))
         self.class_pairs_ = []
     
     def fit(self, X, y):
         """
-        Train OvO SVM classifier.
-        
+        Train OvO SVM classifier with class weighting.
+
         Parameters:
         -----------
         X : array-like of shape (n_samples, n_features)
@@ -227,28 +271,39 @@ class SVMOneVsOne(SVMBase):
         """
         X = np.array(X) if not isinstance(X, np.ndarray) else X
         y = np.array(y) if not isinstance(y, np.ndarray) else y
-        
+
         self.classes_ = np.unique(y)
         self.classifiers_ = []
         self.class_pairs_ = []
-        
+
         # Train K*(K-1)/2 binary classifiers
         for i in range(len(self.classes_)):
             for j in range(i + 1, len(self.classes_)):
                 class_i, class_j = self.classes_[i], self.classes_[j]
-                
+
                 # Select samples from these two classes
                 mask = (y == class_i) | (y == class_j)
                 X_subset = X[mask]
                 y_subset = y[mask]
-                
+
                 # Create binary labels: +1 for class_i, -1 for class_j
                 y_binary = np.where(y_subset == class_i, 1, -1)
-                
+
+                # Compute binary class weights
+                if self.class_weight_mode == 'balanced':
+                    n_pos = np.sum(y_binary == 1)
+                    n_neg = np.sum(y_binary == -1)
+                    total = n_pos + n_neg
+                    weight_pos = total / (2 * n_pos) if n_pos > 0 else 1.0
+                    weight_neg = total / (2 * n_neg) if n_neg > 0 else 1.0
+                    binary_weights = {1: weight_pos, -1: weight_neg}
+                else:
+                    binary_weights = None
+
                 # Train binary SVM
-                clf = _BinarySVM(lr=self.lr, C=self.C, n_iter=self.n_iter)
+                clf = _BinarySVM(lr=self.lr, C=self.C, n_iter=self.n_iter, class_weight=binary_weights)
                 clf.fit(X_subset, y_binary)
-                
+
                 # Store classifier and class pair
                 self.classifiers_.append(((class_i, class_j), (clf.w, clf.b)))
                 self.class_pairs_.append((class_i, class_j))
@@ -291,6 +346,43 @@ class SVMOneVsOne(SVMBase):
         
         return np.array(predictions)
     
+    def predict_proba(self, X):
+        """
+        Predict class probabilities using OvO voting.
+        
+        Converts vote counts to probabilities by normalizing.
+        
+        Returns:
+        --------
+        proba : array of shape (n_samples, n_classes)
+            Predicted class probabilities
+        """
+        X = np.array(X) if not isinstance(X, np.ndarray) else X
+        n_samples = X.shape[0]
+        n_classes = len(self.classes_)
+        probabilities = np.zeros((n_samples, n_classes))
+        
+        for idx, x in enumerate(X):
+            # Vote for each class
+            votes = {class_label: 0 for class_label in self.classes_}
+            
+            for (class_i, class_j), (w, b) in self.classifiers_:
+                # Predict with binary classifier
+                decision = np.dot(w, x) + b
+                
+                # Vote: positive decision → class_i, negative → class_j
+                if decision > 0:
+                    votes[class_i] += 1
+                else:
+                    votes[class_j] += 1
+            
+            # Convert votes to probabilities (normalize)
+            total_votes = sum(votes.values())
+            for class_idx, class_label in enumerate(self.classes_):
+                probabilities[idx, class_idx] = votes[class_label] / total_votes
+        
+        return probabilities
+    
     def _get_save_dict(self):
         """Override to save all pairwise classifiers."""
         base_dict = super()._get_save_dict()
@@ -308,27 +400,28 @@ class SVMOneVsOne(SVMBase):
 class SVMDAG(SVMBase):
     """
     SVM with Directed Acyclic Graph (DAG) multiclass strategy.
-    
+
     Similar to OvO but uses a decision DAG for efficient prediction.
     Trains K*(K-1)/2 binary classifiers but organizes them in a DAG structure.
     Prediction: O(K-1) evaluations instead of O(K²) for OvO.
-    
+
     DAG structure:
     - Root: compare class 1 vs class K
     - Eliminate loser, continue with remaining classes
     - Leaf: final class prediction
     """
-    def __init__(self, lr=0.01, C=1.0, n_iter=1000):
+    def __init__(self, lr=0.01, C=1.0, n_iter=1000, class_weight='balanced'):
         super().__init__(lr, C, n_iter)
+        self.class_weight_mode = class_weight
         self.classifiers_ = {}  # Dict: (class_i, class_j) -> (w, b)
     
     def fit(self, X, y):
         """
-        Train DAGSVM classifier.
-        
+        Train DAGSVM classifier with class weighting.
+
         Training is same as OvO: train all pairwise classifiers.
         Difference is in prediction (DAG traversal).
-        
+
         Parameters:
         -----------
         X : array-like of shape (n_samples, n_features)
@@ -338,27 +431,38 @@ class SVMDAG(SVMBase):
         """
         X = np.array(X) if not isinstance(X, np.ndarray) else X
         y = np.array(y) if not isinstance(y, np.ndarray) else y
-        
+
         self.classes_ = np.unique(y)
         self.classifiers_ = {}
-        
+
         # Train K*(K-1)/2 binary classifiers (same as OvO)
         for i in range(len(self.classes_)):
             for j in range(i + 1, len(self.classes_)):
                 class_i, class_j = self.classes_[i], self.classes_[j]
-                
+
                 # Select samples from these two classes
                 mask = (y == class_i) | (y == class_j)
                 X_subset = X[mask]
                 y_subset = y[mask]
-                
+
                 # Create binary labels: +1 for class_i, -1 for class_j
                 y_binary = np.where(y_subset == class_i, 1, -1)
-                
+
+                # Compute binary class weights
+                if self.class_weight_mode == 'balanced':
+                    n_pos = np.sum(y_binary == 1)
+                    n_neg = np.sum(y_binary == -1)
+                    total = n_pos + n_neg
+                    weight_pos = total / (2 * n_pos) if n_pos > 0 else 1.0
+                    weight_neg = total / (2 * n_neg) if n_neg > 0 else 1.0
+                    binary_weights = {1: weight_pos, -1: weight_neg}
+                else:
+                    binary_weights = None
+
                 # Train binary SVM
-                clf = _BinarySVM(lr=self.lr, C=self.C, n_iter=self.n_iter)
+                clf = _BinarySVM(lr=self.lr, C=self.C, n_iter=self.n_iter, class_weight=binary_weights)
                 clf.fit(X_subset, y_binary)
-                
+
                 # Store in dictionary with tuple key
                 self.classifiers_[(class_i, class_j)] = (clf.w, clf.b)
     
