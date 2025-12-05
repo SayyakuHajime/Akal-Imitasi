@@ -187,7 +187,7 @@ Akal-Imitasi/
 | Nama | NIM | Pembagian Tugas |
 |------|-----|-----------------|
 | M Hazim R. Prajoda | 13523009 | Implementasi DTL scratch, LogReg scratch, SVM scratch, Feature Engineering |
-| Orvin Andika Ikhsan A | 13523017 | Laporan, Tugas pendukung |
+| Orvin Andika Ikhsan A | 13523017 | Laporan SVM, Laporan Logistic Regression |
 | Fajar Kurniawan | 13523027 | Laporan Decision Tree Learning, Laporan Cleaning and Preprocessing |
 | Darrel Adinarya Sunanda | 13523061 | SVM Model, Laporan |
 | Reza Ahmad Syarif | 13523119 | Preprocessing (Handling Class Imbalance dan Feature Selection), Bonus Tree Visualizer, Laporan |
