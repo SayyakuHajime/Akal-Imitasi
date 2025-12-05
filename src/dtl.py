@@ -18,37 +18,95 @@ class ID3Classifier:
         Calculate entropy of a label array.
         Entropy = -Σ(p_i * log2(p_i))
         """
-        # TODO: Implementasi entropy
-        pass
+        _, counts = np.unique(y, return_counts=True)
+        probabilities = counts / len(y)
+        probabilities = probabilities[probabilities > 0]
+        return -np.sum(probabilities * np.log2(probabilities))
     
     def _information_gain(self, X_column, y, threshold):
         """
         Calculate information gain for a given feature and threshold.
         IG = entropy(parent) - weighted_avg(entropy(children))
         """
-        # TODO: Implementasi information gain
-        pass
+        parent_entropy = self._entropy(y)
+        
+        left_mask = X_column <= threshold
+        right_mask = ~left_mask
+        
+        n = len(y)
+        n_left = np.sum(left_mask)
+        n_right = np.sum(right_mask)
+        
+        if n_left == 0 or n_right == 0:
+            return 0
+        
+        left_entropy = self._entropy(y[left_mask])
+        right_entropy = self._entropy(y[right_mask])
+        
+        weighted_entropy = (n_left / n) * left_entropy + (n_right / n) * right_entropy
+        
+        return parent_entropy - weighted_entropy
     
     def _best_split(self, X, y, feature_indices):
         """
         Find the best feature and threshold to split on.
         Returns: (best_feature_idx, best_threshold, best_gain)
         """
-        # TODO: Implementasi best split
-        pass
+        best_gain = -1
+        best_feature_idx = None
+        best_threshold = None
+        
+        for feature_idx in feature_indices:
+            X_column = X[:, feature_idx]
+            thresholds = np.unique(X_column)
+            
+            for threshold in thresholds:
+                gain = self._information_gain(X_column, y, threshold)
+                
+                if gain > best_gain:
+                    best_gain = gain
+                    best_feature_idx = feature_idx
+                    best_threshold = threshold
+        
+        return best_feature_idx, best_threshold, best_gain
     
     def _build_tree(self, X, y, depth=0):
         """
         Recursively build the decision tree.
         Returns: tree node (dict or leaf value)
         """
-        # TODO: Implementasi tree building
-        # Stopping criteria:
-        # - max_depth reached
-        # - min_samples_split
-        # - all samples have same label
-        # - no more information gain
-        pass
+        n_samples, n_features = X.shape
+        n_labels = len(np.unique(y))
+        
+        # Stopping criteria
+        if (self.max_depth is not None and depth >= self.max_depth) or \
+           n_labels == 1 or \
+           n_samples < self.min_samples_split:
+            leaf_value = np.bincount(y.astype(int)).argmax()
+            return leaf_value
+        
+        # Find best split
+        feature_indices = np.arange(n_features)
+        best_feature, best_threshold, best_gain = self._best_split(X, y, feature_indices)
+        
+        if best_gain == 0 or best_feature is None:
+            leaf_value = np.bincount(y.astype(int)).argmax()
+            return leaf_value
+        
+        # Split data
+        left_mask = X[:, best_feature] <= best_threshold
+        right_mask = ~left_mask
+        
+        # Build subtrees
+        left_subtree = self._build_tree(X[left_mask], y[left_mask], depth + 1)
+        right_subtree = self._build_tree(X[right_mask], y[right_mask], depth + 1)
+        
+        return {
+            'feature': best_feature,
+            'threshold': best_threshold,
+            'left': left_subtree,
+            'right': right_subtree
+        }
     
     def fit(self, X, y):
         """
@@ -61,16 +119,21 @@ class ID3Classifier:
         y : array-like of shape (n_samples,)
             Target values
         """
-        # TODO: Convert to numpy if needed, then build tree
-        # self.tree_ = self._build_tree(X, y)
-        pass
+        X = np.array(X) if not isinstance(X, np.ndarray) else X
+        y = np.array(y) if not isinstance(y, np.ndarray) else y
+        self.tree_ = self._build_tree(X, y)
     
     def _predict_sample(self, x, tree):
         """
         Predict class for a single sample by traversing the tree.
         """
-        # TODO: Implementasi tree traversal untuk prediksi
-        pass
+        if not isinstance(tree, dict):
+            return tree
+        
+        if x[tree['feature']] <= tree['threshold']:
+            return self._predict_sample(x, tree['left'])
+        else:
+            return self._predict_sample(x, tree['right'])
     
     def predict(self, X):
         """
@@ -86,9 +149,8 @@ class ID3Classifier:
         y_pred : array of shape (n_samples,)
             Predicted class labels
         """
-        # TODO: Loop through samples and predict each
-        # return np.array([self._predict_sample(x, self.tree_) for x in X])
-        pass
+        X = np.array(X) if not isinstance(X, np.ndarray) else X
+        return np.array([self._predict_sample(x, self.tree_) for x in X])
     
     def save(self, filepath):
         """
@@ -144,50 +206,118 @@ class CARTClassifier:
         Calculate Gini impurity.
         Gini = 1 - Σ(p_i^2)
         """
-        # TODO: Implementasi Gini impurity
-        pass
+        _, counts = np.unique(y, return_counts=True)
+        probabilities = counts / len(y)
+        return 1 - np.sum(probabilities ** 2)
     
     def _gini_gain(self, X_column, y, threshold):
         """
         Calculate Gini gain for a split.
         """
-        # TODO: Implementasi Gini gain
-        pass
+        parent_gini = self._gini(y)
+        
+        left_mask = X_column <= threshold
+        right_mask = ~left_mask
+        
+        n = len(y)
+        n_left = np.sum(left_mask)
+        n_right = np.sum(right_mask)
+        
+        if n_left == 0 or n_right == 0:
+            return 0
+        
+        left_gini = self._gini(y[left_mask])
+        right_gini = self._gini(y[right_mask])
+        
+        weighted_gini = (n_left / n) * left_gini + (n_right / n) * right_gini
+        
+        return parent_gini - weighted_gini
     
     def _best_split(self, X, y, feature_indices):
         """
         Find the best feature and threshold to split on using Gini.
         """
-        # TODO: Implementasi best split dengan Gini
-        pass
+        best_gain = -1
+        best_feature_idx = None
+        best_threshold = None
+        
+        for feature_idx in feature_indices:
+            X_column = X[:, feature_idx]
+            thresholds = np.unique(X_column)
+            
+            for threshold in thresholds:
+                gain = self._gini_gain(X_column, y, threshold)
+                
+                if gain > best_gain:
+                    best_gain = gain
+                    best_feature_idx = feature_idx
+                    best_threshold = threshold
+        
+        return best_feature_idx, best_threshold, best_gain
     
     def _build_tree(self, X, y, depth=0):
         """
         Recursively build the decision tree using Gini.
         """
-        # TODO: Implementasi tree building dengan Gini
-        pass
+        n_samples, n_features = X.shape
+        n_labels = len(np.unique(y))
+        
+        # Stopping criteria
+        if (self.max_depth is not None and depth >= self.max_depth) or \
+           n_labels == 1 or \
+           n_samples < self.min_samples_split:
+            leaf_value = np.bincount(y.astype(int)).argmax()
+            return leaf_value
+        
+        # Find best split
+        feature_indices = np.arange(n_features)
+        best_feature, best_threshold, best_gain = self._best_split(X, y, feature_indices)
+        
+        if best_gain == 0 or best_feature is None:
+            leaf_value = np.bincount(y.astype(int)).argmax()
+            return leaf_value
+        
+        # Split data
+        left_mask = X[:, best_feature] <= best_threshold
+        right_mask = ~left_mask
+        
+        # Build subtrees
+        left_subtree = self._build_tree(X[left_mask], y[left_mask], depth + 1)
+        right_subtree = self._build_tree(X[right_mask], y[right_mask], depth + 1)
+        
+        return {
+            'feature': best_feature,
+            'threshold': best_threshold,
+            'left': left_subtree,
+            'right': right_subtree
+        }
     
     def fit(self, X, y):
         """
         Build decision tree from training data.
         """
-        # TODO: self.tree_ = self._build_tree(X, y)
-        pass
+        X = np.array(X) if not isinstance(X, np.ndarray) else X
+        y = np.array(y) if not isinstance(y, np.ndarray) else y
+        self.tree_ = self._build_tree(X, y)
     
     def _predict_sample(self, x, tree):
         """
         Predict class for a single sample.
         """
-        # TODO: Implementasi tree traversal
-        pass
+        if not isinstance(tree, dict):
+            return tree
+        
+        if x[tree['feature']] <= tree['threshold']:
+            return self._predict_sample(x, tree['left'])
+        else:
+            return self._predict_sample(x, tree['right'])
     
     def predict(self, X):
         """
         Predict class labels for samples in X.
         """
-        # TODO: return np.array([self._predict_sample(x, self.tree_) for x in X])
-        pass
+        X = np.array(X) if not isinstance(X, np.ndarray) else X
+        return np.array([self._predict_sample(x, self.tree_) for x in X])
     
     def save(self, filepath):
         """Save model to file."""
@@ -251,8 +381,11 @@ class C45Classifier:
         Calculate entropy of a label array.
         Entropy = -Σ(p_i * log2(p_i))
         """
-        # TODO: Implementasi entropy (sama seperti ID3)
-        pass
+        _, counts = np.unique(y, return_counts=True)
+        probabilities = counts / len(y)
+        # Filter out zero probabilities to avoid log(0)
+        probabilities = probabilities[probabilities > 0]
+        return -np.sum(probabilities * np.log2(probabilities))
     
     def _split_info(self, X_column, threshold):
         """
@@ -260,8 +393,20 @@ class C45Classifier:
         SplitInfo = -Σ(|S_i|/|S| * log2(|S_i|/|S|))
         Used to normalize information gain → gain ratio
         """
-        # TODO: Implementasi split info
-        pass
+        left_mask = X_column <= threshold
+        right_mask = ~left_mask
+        
+        n = len(X_column)
+        n_left = np.sum(left_mask)
+        n_right = np.sum(right_mask)
+        
+        if n_left == 0 or n_right == 0:
+            return 0
+        
+        p_left = n_left / n
+        p_right = n_right / n
+        
+        return -(p_left * np.log2(p_left) + p_right * np.log2(p_right))
     
     def _gain_ratio(self, X_column, y, threshold):
         """
@@ -271,32 +416,102 @@ class C45Classifier:
         This normalizes information gain to avoid bias toward features
         with many values.
         """
-        # TODO: Implementasi gain ratio
-        # 1. Hitung information gain (entropy-based)
-        # 2. Hitung split info
-        # 3. Return gain / split_info (handle division by zero)
-        pass
+        # Calculate information gain (same as ID3)
+        parent_entropy = self._entropy(y)
+        
+        left_mask = X_column <= threshold
+        right_mask = ~left_mask
+        
+        n = len(y)
+        n_left = np.sum(left_mask)
+        n_right = np.sum(right_mask)
+        
+        if n_left == 0 or n_right == 0:
+            return 0
+        
+        left_entropy = self._entropy(y[left_mask])
+        right_entropy = self._entropy(y[right_mask])
+        
+        weighted_entropy = (n_left / n) * left_entropy + (n_right / n) * right_entropy
+        information_gain = parent_entropy - weighted_entropy
+        
+        # Calculate split info
+        split_info = self._split_info(X_column, threshold)
+        
+        # Avoid division by zero
+        if split_info == 0:
+            return 0
+        
+        return information_gain / split_info
     
     def _best_split(self, X, y, feature_indices):
         """
         Find the best feature and threshold to split on using gain ratio.
         Returns: (best_feature_idx, best_threshold, best_gain_ratio)
         """
-        # TODO: Implementasi best split dengan gain ratio
-        pass
+        best_gain_ratio = -1
+        best_feature_idx = None
+        best_threshold = None
+        
+        for feature_idx in feature_indices:
+            X_column = X[:, feature_idx]
+            thresholds = np.unique(X_column)
+            
+            for threshold in thresholds:
+                gain_ratio = self._gain_ratio(X_column, y, threshold)
+                
+                if gain_ratio > best_gain_ratio:
+                    best_gain_ratio = gain_ratio
+                    best_feature_idx = feature_idx
+                    best_threshold = threshold
+        
+        return best_feature_idx, best_threshold, best_gain_ratio
     
     def _build_tree(self, X, y, depth=0):
         """
         Recursively build the decision tree.
-        Returns: tree node (dict or leaf value)
+        Returns: tree node (dict or leaf value with class distribution)
         """
-        # TODO: Implementasi tree building dengan gain ratio
-        # Stopping criteria (sama seperti ID3):
-        # - max_depth reached
-        # - min_samples_split
-        # - all samples have same label
-        # - no more gain ratio improvement
-        pass
+        n_samples, n_features = X.shape
+        n_labels = len(np.unique(y))
+        
+        # Stopping criteria
+        if (self.max_depth is not None and depth >= self.max_depth) or \
+           n_labels == 1 or \
+           n_samples < self.min_samples_split:
+            # Return most common class as leaf + class distribution
+            leaf_value = np.bincount(y.astype(int)).argmax()
+            # Store class distribution for predict_proba
+            class_dist = np.bincount(y.astype(int), minlength=self.n_classes_)
+            class_proba = class_dist / class_dist.sum()
+            return {'value': leaf_value, 'proba': class_proba}
+        
+        # Find best split
+        feature_indices = np.arange(n_features)
+        best_feature, best_threshold, best_gain = self._best_split(X, y, feature_indices)
+        
+        # If no gain, return leaf
+        if best_gain == 0 or best_feature is None:
+            leaf_value = np.bincount(y.astype(int)).argmax()
+            class_dist = np.bincount(y.astype(int), minlength=self.n_classes_)
+            class_proba = class_dist / class_dist.sum()
+            return {'value': leaf_value, 'proba': class_proba}
+        
+        # Split data
+        left_mask = X[:, best_feature] <= best_threshold
+        right_mask = ~left_mask
+        
+        # Build subtrees
+        left_subtree = self._build_tree(X[left_mask], y[left_mask], depth + 1)
+        right_subtree = self._build_tree(X[right_mask], y[right_mask], depth + 1)
+        
+        # Return node
+        return {
+            'feature': best_feature,
+            'threshold': best_threshold,
+            'left': left_subtree,
+            'right': right_subtree
+        }
     
     def _prune_tree(self, tree, X, y):
         """
@@ -305,12 +520,10 @@ class C45Classifier:
         Cost-complexity measure: R_alpha(T) = R(T) + alpha * |T|
         where R(T) is misclassification rate and |T| is number of leaves.
         """
-        # TODO: Implementasi pruning (optional, untuk bonus)
-        # Pruning dilakukan bottom-up:
-        # 1. Traverse tree from leaves to root
-        # 2. For each node, compare cost with/without subtree
-        # 3. Prune if cost reduces
-        pass
+        # Simplified pruning implementation
+        # For full implementation, would need bottom-up traversal with cost calculation
+        # This is a basic version that can be enhanced
+        return tree  # Placeholder - pruning can be added as enhancement
     
     def fit(self, X, y):
         """
@@ -323,26 +536,78 @@ class C45Classifier:
         y : array-like of shape (n_samples,)
             Target values
         """
-        # TODO: Convert to numpy if needed, then build tree
-        # self.tree_ = self._build_tree(X, y)
-        # if self.ccp_alpha > 0:
-        #     self.tree_ = self._prune_tree(self.tree_, X, y)
-        pass
+        X = np.array(X) if not isinstance(X, np.ndarray) else X
+        y = np.array(y) if not isinstance(y, np.ndarray) else y
+        
+        # Store number of classes for predict_proba
+        self.n_classes_ = len(np.unique(y))
+        
+        self.tree_ = self._build_tree(X, y)
+        
+        if self.ccp_alpha > 0:
+            self.tree_ = self._prune_tree(self.tree_, X, y)
     
     def _predict_sample(self, x, tree):
         """
         Predict class for a single sample by traversing the tree.
         """
-        # TODO: Implementasi tree traversal untuk prediksi
-        pass
+        # If leaf node (dict with 'value'), return the value
+        if isinstance(tree, dict) and 'value' in tree:
+            return tree['value']
+        
+        # Old format compatibility: if integer, return it
+        if not isinstance(tree, dict):
+            return tree
+        
+        # Otherwise, traverse tree
+        if x[tree['feature']] <= tree['threshold']:
+            return self._predict_sample(x, tree['left'])
+        else:
+            return self._predict_sample(x, tree['right'])
+    
+    def _predict_proba_sample(self, x, tree):
+        """
+        Predict class probabilities for a single sample.
+        """
+        # If leaf node with probabilities
+        if isinstance(tree, dict) and 'proba' in tree:
+            return tree['proba']
+        
+        # Old format compatibility: if integer leaf, return one-hot
+        if not isinstance(tree, dict):
+            proba = np.zeros(self.n_classes_)
+            proba[tree] = 1.0
+            return proba
+        
+        # Otherwise, traverse tree
+        if x[tree['feature']] <= tree['threshold']:
+            return self._predict_proba_sample(x, tree['left'])
+        else:
+            return self._predict_proba_sample(x, tree['right'])
     
     def predict(self, X):
         """
         Predict class labels for samples in X.
         """
-        # TODO: Loop through samples and predict each
-        # return np.array([self._predict_sample(x, self.tree_) for x in X])
-        pass
+        X = np.array(X) if not isinstance(X, np.ndarray) else X
+        return np.array([self._predict_sample(x, self.tree_) for x in X])
+    
+    def predict_proba(self, X):
+        """
+        Predict class probabilities for samples in X.
+        
+        Parameters:
+        -----------
+        X : array-like of shape (n_samples, n_features)
+            Samples to predict
+            
+        Returns:
+        --------
+        proba : array of shape (n_samples, n_classes)
+            Predicted class probabilities
+        """
+        X = np.array(X) if not isinstance(X, np.ndarray) else X
+        return np.array([self._predict_proba_sample(x, self.tree_) for x in X])
     
     def save(self, filepath):
         """

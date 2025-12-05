@@ -80,70 +80,12 @@ Proyek ini mencakup perbandingan antara implementasi from-scratch dengan library
 
 - Python 3.8 atau lebih tinggi
 - pip
-- virtualenv (optional tapi recommended)
-
-### Installation 
-
-**Option 1: Automatic Setup (Recommended)**
-```bash
-# Clone repository
-git clone https://github.com/SayyakuHajime/Akal-Imitasi.git
-cd Akal-Imitasi
-
-# Run setup script
-./setup_env.sh
-
-# Activate environment
-source .venv/bin/activate
-```
-
-**Option 2: Manual Setup**
-```bash
-# Clone repository
-git clone https://github.com/SayyakuHajime/Akal-Imitasi.git
-cd Akal-Imitasi
-
-# Create virtual environment
-python3 -m venv .venv
-
-# Activate virtual environment
-source .venv/bin/activate  # Linux/Mac
-# .venv\Scripts\activate   # Windows
-
-# Install dependencies
-pip install -r requirements.txt
-```
-
-### Verifikasi Instalasi
-```bash
-# Check if packages installed correctly
-python -c "import numpy, pandas, sklearn; print('All packages installed!')"
-```
-
-<div align="right">
-
-[&nwarr; Back to top](#readme-top)
-
-</div>
 
 ## Usage
 
 ### Menjalankan Notebook
 
-1. **Activate environment**
-   ```bash
-   source .venv/bin/activate
-   ```
-
-2. **Run Jupyter Notebook**
-   ```bash
-   jupyter notebook Tubes2_AI_kelompok5_notebook.ipynb
-   ```
-
-3. **Atau jalankan dari VS Code**
-   - Buka `Tubes2_AI_kelompok5_notebook.ipynb`
-   - Select kernel: `.venv/bin/python`
-   - Run cells
+just run the notebook, make sure the library and the environment is all set up
 
 <div align="right">
 
@@ -172,15 +114,15 @@ Akal-Imitasi/
 │   ├── train.csv
 │   ├── test.csv
 │   └── sample_submission.csv
-├── src/                           # Source code (from-scratch implementations)
+├── src/                           # Source code from-scratch
 │   ├── __init__.py
 │   ├── dtl.py                     # ID3, C4.5, CART
 │   ├── logistic_regression.py    # Logistic Regression (SGA)
 │   └── svm.py                     # SVM (OvA, OvO, DAGSVM)
-├── doc/                           # Laporan PDF
-├── Tubes2_AI_kelompok5_notebook.ipynb  # Main notebook
-├── requirements.txt               # Python dependencies
-├── setup_env.sh                   # Setup script
+├── doc/                           
+├── Tubes2_AI_kelompok5_notebook_BEST.ipynb  
+├── feature_engineering.py         
+├── ...
 └── README.md
 ```
 
