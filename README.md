@@ -105,7 +105,7 @@ pip install -r requirements.txt
 ### Menjalankan Notebook Utama
 
 ```bash
-jupyter notebook Tubes2_AI_kelompok5_notebook_BEST.ipynb
+jupyter notebook Tubes2_AI_kelompok5_notebook.ipynb
 ```
 
 Notebook ini berisi:
@@ -158,7 +158,7 @@ Akal-Imitasi/
 │   ├── dtl.py                     # Decision Tree Learning (ID3, C4.5, CART)
 │   ├── logistic_regression.py    # Logistic Regression (SGD)
 │   └── svm.py                     # SVM (OvA, OvO, DAGSVM)
-├── Tubes2_AI_kelompok5_notebook_BEST.ipynb  # Main notebook
+├── Tubes2_AI_kelompok5_notebook.ipynb  # Jupyter notebook
 ├── feature_engineering.py         # Feature engineering functions
 ├── requirements.txt
 └── README.md
@@ -168,7 +168,7 @@ Akal-Imitasi/
 
 ### Key Files
 
-- **`Tubes2_AI_kelompok5_notebook_BEST.ipynb`**: Main notebook dengan semua eksperimen
+- **`Tubes2_AI_kelompok5_notebook.ipynb`**: Main notebook dengan semua eksperimen
 - **`src/dtl.py`**: Decision Tree implementations (ID3, C4.5, CART)
 - **`src/logistic_regression.py`**: Multinomial Logistic Regression
 - **`src/svm.py`**: SVM dengan 3 multiclass strategies
